@@ -20,6 +20,12 @@ npx skills add <owner>/<repo>
 npx skills add . --list --full-depth
 ```
 
+## 亮点
+
+- 🔒 安全且本地优先：在你自己的机器上运行技能，敏感文本和资源无需上传。
+- 🧠 人格化语音控制：微调语气词、情绪参数和场景预设，打造有陪伴感的输出。
+- 🎙️ 生产级语音：从快速 TTS 生成到时间轴精确渲染，一步到位。
+
 ## 已有技能
 
 | 名称 | 说明 | 文档 | 可运行命令 |
@@ -27,6 +33,8 @@ npx skills add . --list --full-depth
 | tts | 将文本转为语音，支持 Kokoro / Noiz：简单模式、时间轴精确渲染、精确时长控制与参考音频音色克隆。 | [SKILL.md](./skills/tts/SKILL.md) | `npx skills add NoizAI/skills --full-depth --skill tts -y` |
 | video-translation | 视频翻译与配音：按字幕时间轴生成 TTS 并替换原音轨，支持按句使用原视频对应时间段的参考音频。 | [SKILL.md](./skills/video-translation/SKILL.md) | `npx skills add NoizAI/skills --full-depth --skill video-translation -y` |
 | characteristic-voice | 通过小声音、情绪参数和场景预设，让语音更有陪伴感与人格化表达。 | [SKILL.md](./skills/characteristic-voice/SKILL.zh-CN.md) | `npx skills add NoizAI/skills --full-depth --skill characteristic-voice -y` |
+| video-translation | 将视频语音翻译成另一种语言，用 TTS 生成配音并替换原始音轨。 | [SKILL.md](./skills/video-translation/SKILL.md) | `npx skills add NoizAI/skills --full-depth --skill video-translation -y` |
+| template-skill | 可复用的技能编写模板，内含触发词、工作流与输入输出约定。 | [SKILL.md](./skills/template-skill/SKILL.md) | `npx skills add NoizAI/skills --full-depth --skill template-skill -y` |
 
 ## 快速验证
 
