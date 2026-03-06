@@ -1,4 +1,5 @@
 # 让你的智能体“开口说话”
+<img width="1760" height="608" alt="banner" src="https://github.com/user-attachments/assets/79efa5ae-e056-426c-ae67-362dd0f44963" />
 
 [English](./README.md) | 简体中文
 
@@ -25,6 +26,7 @@ npx skills add . --list --full-depth
 - 🔒 安全且本地优先：在你自己的机器上运行技能，敏感文本和资源无需上传。
 - 🧠 人格化语音控制：微调语气词、情绪参数和场景预设，打造有陪伴感的输出。
 - 🎙️ 生产级语音：从快速 TTS 生成到时间轴精确渲染，一步到位。
+- 📤 一键发送至聊天平台：生成语音并作为原生语音消息发送至飞书、Telegram 或 Discord —— 无需额外代码。
 
 ## 已有技能
 
@@ -34,6 +36,7 @@ npx skills add . --list --full-depth
 | chat-with-anyone | 使用任何角色（真实人物或虚构角色）的声音进行对话：自动在线寻找其语音、提取干净参考样本，并生成语音回复。 | [SKILL.md](./skills/chat-with-anyone/SKILL.md) | `npx skills add NoizAI/skills --full-depth --skill chat-with-anyone -y` |
 | characteristic-voice | 通过语气词、情绪参数和场景预设，让生成语音更有陪伴感和人格化表达。 | [SKILL.md](./skills/characteristic-voice/SKILL.md) | `npx skills add NoizAI/skills --full-depth --skill characteristic-voice -y` |
 | video-translation | 将视频语音翻译成另一种语言，用 TTS 生成配音并替换原始音轨，同时保留视频画面。 | [SKILL.md](./skills/video-translation/SKILL.md) | `npx skills add NoizAI/skills --full-depth --skill video-translation -y` |
+| daily-news-caster | 获取最新的实时新闻，并自动生成双人对话式的播客音频。 | [SKILL.md](./skills/daily-news-caster/SKILL.md) | `npx skills add NoizAI/skills --full-depth --skill daily-news-caster -y` |
 
 ## 快速验证
 
