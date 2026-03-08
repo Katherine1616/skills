@@ -22,14 +22,6 @@ _spec = importlib.util.spec_from_file_location("tts", Path(__file__).parent / "t
 tts = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(tts)  # type: ignore[union-attr]
 
-# Load noiz_tts.py as a module without executing main()
-_noiz_spec = importlib.util.spec_from_file_location(
-    "noiz_tts", Path(__file__).parent / "noiz_tts.py"
-)
-noiz_tts = importlib.util.module_from_spec(_noiz_spec)
-_noiz_spec.loader.exec_module(noiz_tts)  # type: ignore[union-attr]
-
-
 # ── helpers ───────────────────────────────────────────────────────────
 
 def make_speak_args(**overrides):
@@ -174,16 +166,25 @@ class TestCmdSpeakGuestMode(unittest.TestCase):
 
 @unittest.skipUnless(os.getenv("TTS_LIVE_TEST"), "set TTS_LIVE_TEST=1 to run live tests")
 class TestLiveGuestSynthesize(unittest.TestCase):
-    """Calls the real Noiz guest endpoint; requires network access."""
+    """Calls the real Noiz guest endpoint; requires network access and requests."""
 
     VOICE_ID = "883b6b7c"
     TEXT = "Hello, this is a live test."
+
+    @classmethod
+    def setUpClass(cls):
+        tts.ensure_noiz_ready()  # installs requests if missing, no-op if already present
+        _spec = importlib.util.spec_from_file_location(
+            "noiz_tts", Path(__file__).parent / "noiz_tts.py"
+        )
+        cls._noiz_tts = importlib.util.module_from_spec(_spec)
+        _spec.loader.exec_module(cls._noiz_tts)  # type: ignore[union-attr]
 
     def test_synthesize_guest_produces_audio_file(self):
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
             out_path = Path(f.name)
         try:
-            duration = noiz_tts.synthesize_guest(
+            duration = self._noiz_tts.synthesize_guest(
                 base_url="https://noiz.ai/v1",
                 text=self.TEXT,
                 voice_id=self.VOICE_ID,
