@@ -5,164 +5,191 @@ description: Chat with any real person or fictional character in their own voice
 
 # Chat with Anyone
 
-Chat with any real person or fictional character in their own voice. Two modes:
-1. **Name-based** — find the person's speech online, extract a clean reference sample, and clone their voice.
-2. **Image-based** — upload a photo of a person, use the Noiz voice-design API to generate a matching voice, and chat using that voice.
+Clone a real person's voice from online video, or design a voice from a photo, then roleplay as that person with TTS.
 
-## Triggers
-- 我想跟xxx聊天 (I want to chat with xxx)
-- 你来扮演xxx跟我说话 (Play the role of xxx and talk to me)
-- 让xxx给我讲讲这篇文章 (Let xxx explain this article to me)
-- 用xxx的声音说 (Say this in xxx's voice)
-- Talk to me like xxx
-- Roleplay as xxx
-- 我想跟这张图里的人聊天 (I want to chat with the person in this image)
-- 用这个人的声音跟我说话 (Talk to me in this person's voice) + attached image
-- Chat with the person in this photo
+## Prerequisites
 
-## How to Choose the Mode
+- `youtube-downloader` skill installed (Workflow A)
+- `tts` skill installed
+- `ffmpeg` on PATH
+- Noiz API key configured: `python3 skills/tts/scripts/tts.py config --set-api-key YOUR_KEY`
 
-| Situation | Mode |
-|-----------|------|
-| User names a specific real/fictional person | Name-based (Workflow A) |
-| User uploads/attaches an image and wants to talk to that person | Image-based (Workflow B) |
-| User uploads an image AND names the person | Image-based preferred (the image gives more accurate voice design) |
-| User uploads an image, agent recognizes a public figure | Name-based (Workflow A) — real voice clone is more authentic |
+## Mode Selection
+
+- **User names a person** (real or fictional) --> Workflow A
+- **User provides an image**, person is unrecognizable --> Workflow B
+- **User provides an image**, person is a recognizable public figure --> Workflow A (real voice is more authentic)
+- **Multiple people in image** --> Ask which person first
 
 ---
 
-## Workflow A: Name-based (find voice online)
+## Workflow A: Name-based (voice from online video)
 
-When the user names a specific character, follow these steps:
+Track progress with this checklist:
 
-### A1. Character Disambiguation
-If the user's description is ambiguous (e.g., "US President", "Spider-Man actor"), ask for clarification first to determine the exact person or specific portrayal they want.
+```
+- [ ] A1. Disambiguate character
+- [ ] A2. Find reference video
+- [ ] A3. Download audio + subtitles
+- [ ] A4. Extract best reference segment
+- [ ] A5. Generate speech
+```
+
+### A1. Disambiguate Character
+
+If ambiguous (e.g. "US President", "Spider-Man actor"), ask the user to specify the exact person before proceeding.
 
 ### A2. Find a Reference Video
-Use your web search capabilities to find a YouTube, Bilibili, or TikTok video of the character speaking clearly.
-- Look for interviews, speeches, or monologues where there is little to no background music.
-- Grab the URL of the best candidate video.
 
-### A3. Download Video and Subtitles
-Use the `youtube-downloader` skill to download the video and its auto-generated subtitles. Wait for the download to complete before proceeding.
+Use web search to find a YouTube video of the person speaking clearly. Best candidates: interviews, speeches, press conferences. Avoid videos with heavy background music.
 
-```bash
-python skills/youtube-downloader/scripts/download_video.py "VIDEO_URL" -o "tmp/character_audio" --audio-only --subtitles
-```
+Search queries to try:
+- `{CHARACTER_NAME} interview` / `{CHARACTER_NAME} 采访`
+- `{CHARACTER_NAME} speech` / `{CHARACTER_NAME} 演讲`
+- `{CHARACTER_NAME} press conference`
 
-### A4. Extract Audio Segment
-Read the downloaded subtitle file (e.g., `.vtt` or `.srt`) to find a continuous 10-30 second segment where the character is speaking clearly without long pauses. Note the start and end timestamps.
-
-Use `ffmpeg` to extract this specific audio segment as a `.wav` file to use as the reference audio.
+### A3. Download Audio and Subtitles
 
 ```bash
-ffmpeg -y -i "tmp/character_audio/VideoTitle.m4a" -ss 00:01:15 -to 00:01:30 -c:a pcm_s16le -ar 24000 -ac 1 "skills/chat-with-anyone/character_name_ref.wav"
+python skills/youtube-downloader/scripts/download_video.py "{VIDEO_URL}" \
+  -o "tmp/chat_with_anyone/{CHARACTER_NAME}" --audio-only --subtitles
 ```
+
+After download, list the output directory to identify the audio file and SRT subtitle file:
+
+```bash
+ls tmp/chat_with_anyone/{CHARACTER_NAME}/
+```
+
+Expected output: a `.mp3` audio file and one or more `.srt` subtitle files.
+
+**If no subtitle files appear**: try a different video that has auto-generated captions, or add `--sub-lang en,zh-Hans` to request specific languages.
+
+### A4. Extract Best Reference Segment
+
+Use the automated extraction script — it parses the SRT, finds the densest 3-12 second speech window, and extracts it as a WAV:
+
+```bash
+python3 skills/chat-with-anyone/scripts/extract_ref_segment.py \
+  --srt "tmp/chat_with_anyone/{CHARACTER_NAME}/{SRT_FILE}" \
+  --audio "tmp/chat_with_anyone/{CHARACTER_NAME}/{AUDIO_FILE}" \
+  -o "tmp/chat_with_anyone/{CHARACTER_NAME}/ref.wav"
+```
+
+The script prints the selected time range and saves the reference WAV. Verify the output exists and is non-empty before proceeding.
+
+**If the script reports no suitable segment**: try `--min-duration 2` for shorter clips, or download a different video.
 
 ### A5. Generate Speech and Roleplay
-Respond to the user's prompt while staying in character. Use the `tts` skill with the extracted audio as `--ref-audio` to generate the spoken response.
+
+Write a response in character, then synthesize it:
 
 ```bash
-python3 skills/tts/scripts/tts.py -t "Hello there! I am ready to chat with you." --ref-audio "skills/chat-with-anyone/character_name_ref.wav" -o "output.wav"
+python3 skills/tts/scripts/tts.py \
+  -t "{RESPONSE_TEXT}" \
+  --ref-audio "tmp/chat_with_anyone/{CHARACTER_NAME}/ref.wav" \
+  -o "tmp/chat_with_anyone/{CHARACTER_NAME}/reply.wav"
 ```
+
+Present the generated audio file to the user along with the text. For subsequent messages, reuse the same `--ref-audio` path.
 
 ---
 
 ## Workflow B: Image-based (voice from photo)
 
-When the user uploads an image and wants to chat with the person depicted, follow these steps:
+Track progress with this checklist:
 
-### B1. Analyze the Image
-First, use your own vision capability to look at the image and try to identify the person:
-
-1. **Try to recognize the person first.** If the person is a recognizable public figure or fictional character (e.g. a celebrity, politician, anime character), state their name. If you can identify them, **switch to Workflow A** — finding their real voice online will produce a far more authentic result than voice-design.
-2. **If the person is unrecognizable** (an ordinary person, or you're not confident in the identification), produce a detailed voice description covering:
-   - **Gender** (male / female)
-   - **Approximate age** (e.g. "around 30 years old")
-   - **Apparent demeanor / personality** (e.g. cheerful, authoritative, gentle, energetic)
-   - **Any contextual cues** (e.g. wearing a suit → likely professional tone; athletic outfit → energetic)
-
-If the image shows multiple people, ask the user which person they want to talk to, then analyze only that person.
-
-### B2. Design the Voice
-Pass **both** the image and the agent-generated description to `voice_design.py`. Combining the image with a textual description produces significantly better voice matches than either input alone.
-
-```bash
-python3 skills/chat-with-anyone/voice_design.py \
-  --picture "path/to/person.jpg" \
-  --voice-description "A warm male voice, around 30 years old, calm and friendly tone, speaks with confidence" \
-  -o "tmp/voice_design_output"
+```
+- [ ] B1. Analyze image
+- [ ] B2. Design voice
+- [ ] B3. Preview (optional)
+- [ ] B4. Generate speech
 ```
 
-The script will:
-- Call the Noiz `/voice-design` API with the image
-- Print the detected voice features (gender, age, language, etc.)
-- Save preview audio files to the output directory
-- Write the best `voice_id` to `tmp/voice_design_output/voice_id.txt`
+### B1. Analyze the Image
 
-### B3. (Optional) Let the User Preview
-Play or present the saved preview audio file(s) so the user can hear the designed voice before proceeding. If the user is not satisfied, re-run with a different `--voice-description` or adjusted `--guidance-scale`.
+Use your vision capability to examine the image:
+
+1. **If the person is a recognizable public figure** --> switch to Workflow A for authentic voice.
+2. **If unrecognizable**, produce a voice description covering:
+   - Gender (male / female)
+   - Approximate age (e.g. "around 30 years old")
+   - Apparent demeanor (e.g. cheerful, authoritative, gentle)
+   - Contextual cues (e.g. suit --> professional tone; athletic outfit --> energetic)
+
+### B2. Design the Voice
+
+Pass both the image and the description to the voice-design script:
+
+```bash
+python3 skills/chat-with-anyone/scripts/voice_design.py \
+  --picture "{IMAGE_PATH}" \
+  --voice-description "{VOICE_DESCRIPTION}" \
+  -o "tmp/chat_with_anyone/voice_design"
+```
+
+The script outputs:
+- Detected voice features (printed to stdout)
+- Preview audio files in the output directory
+- `voice_id.txt` containing the best voice ID
+
+Read the voice ID:
+
+```bash
+cat tmp/chat_with_anyone/voice_design/voice_id.txt
+```
+
+### B3. Preview (Optional)
+
+Present the preview audio files from the output directory so the user can hear the voice. If unsatisfied, re-run B2 with adjusted `--voice-description` or `--guidance-scale`.
 
 ### B4. Generate Speech and Roleplay
-Read the `voice_id` from the output, then use the `tts` skill with `--voice-id` to generate the spoken response.
 
 ```bash
 python3 skills/tts/scripts/tts.py \
-  -t "Hello! Nice to meet you. What would you like to talk about?" \
-  --voice-id "VOICE_ID_FROM_STEP_B2" \
-  -o "output.wav"
+  -t "{RESPONSE_TEXT}" \
+  --voice-id "{VOICE_ID}" \
+  -o "tmp/chat_with_anyone/voice_design/reply.wav"
 ```
 
-For subsequent messages in the conversation, keep using the same `--voice-id` so the voice stays consistent.
+For subsequent messages, keep using the same `--voice-id` for consistency.
 
 ---
 
-## Example Conversations
-
-### Example 1: Name-based
+## Example: Name-based
 
 **User**: 我想跟特朗普聊天，让他给我讲个睡前故事。
 
-**Agent**:
-1. (Internal) Identify character: Donald Trump.
-2. (Internal) Find a good speech video URL: `https://www.youtube.com/watch?v=xxxxxxxx`.
-3. (Internal) Download audio & subs:
-   `python skills/youtube-downloader/scripts/download_video.py "https://www.youtube.com/watch?v=xxxxxxxx" -o tmp/trump --audio-only --subtitles`
-4. (Internal) Read subtitle, find good segment (e.g. 00:02:10 to 00:02:30).
-5. (Internal) Extract clean wav:
-   `ffmpeg -y -i "tmp/trump/audio.m4a" -ss 00:02:10 -to 00:02:30 -c:a pcm_s16le "skills/chat-with-anyone/trump_ref.wav"`
-6. (Internal) Generate TTS:
-   `python3 skills/tts/scripts/tts.py -t "Let me tell you a tremendous story..." --ref-audio "skills/chat-with-anyone/trump_ref.wav" -o "trump_story.wav"`
-7. **Agent replies**: "Here is the audio of the bedtime story from Donald Trump!" (Presents `trump_story.wav` and the text).
+**Agent steps**:
+1. Character: Donald Trump. No disambiguation needed.
+2. Search `Donald Trump speech youtube`, find a clear speech video.
+3. Download:
+   `python skills/youtube-downloader/scripts/download_video.py "https://youtube.com/watch?v=..." -o tmp/chat_with_anyone/trump --audio-only --subtitles`
+4. Extract reference:
+   `python3 skills/chat-with-anyone/scripts/extract_ref_segment.py --srt "tmp/chat_with_anyone/trump/....srt" --audio "tmp/chat_with_anyone/trump/....mp3" -o "tmp/chat_with_anyone/trump/ref.wav"`
+5. Generate TTS in Trump's style:
+   `python3 skills/tts/scripts/tts.py -t "Let me tell you a tremendous bedtime story..." --ref-audio "tmp/chat_with_anyone/trump/ref.wav" -o "tmp/chat_with_anyone/trump/reply.wav"`
+6. Present `reply.wav` and the story text to the user.
 
-### Example 2: Image-based
+## Example: Image-based
 
 **User**: [uploads photo.jpg] 我想跟这张图片里的人聊天
 
-**Agent**:
-1. (Internal) Use vision to analyze the image — cannot identify as a known person. It shows a young woman, roughly 25 years old, long hair, wearing a casual sweater, smiling warmly at the camera.
-2. (Internal) Person is unrecognizable → stay in Workflow B. Generate voice description: "A young Chinese woman around 25 years old, with a gentle, cheerful and warm voice. Speaks softly with a friendly tone."
-3. (Internal) Design a voice from the image + description:
-   `python3 skills/chat-with-anyone/voice_design.py --picture "photo.jpg" --voice-description "A young Chinese woman around 25 years old, with a gentle, cheerful and warm voice. Speaks softly with a friendly tone." -o "tmp/voice_design_output"`
-4. (Internal) Read result: `voice_id = abc123`, features: female, 20-30, Chinese.
-5. (Internal) Present preview audio to user for confirmation.
-6. (Internal) Generate TTS with the designed voice:
-   `python3 skills/tts/scripts/tts.py -t "你好呀！很高兴认识你，想聊点什么呢？" --voice-id "abc123" -o "output.wav"`
-7. **Agent replies**: Tells the user the visual analysis result, presents `output.wav`, and continues roleplay with same `voice_id`.
+**Agent steps**:
+1. Vision analysis: unrecognizable young woman, ~25, casual sweater, warm smile.
+2. Design voice:
+   `python3 skills/chat-with-anyone/scripts/voice_design.py --picture "photo.jpg" --voice-description "A young Chinese woman around 25, gentle and warm voice, friendly tone" -o "tmp/chat_with_anyone/voice_design"`
+3. Read voice ID from `tmp/chat_with_anyone/voice_design/voice_id.txt`.
+4. Generate TTS:
+   `python3 skills/tts/scripts/tts.py -t "你好呀！很高兴认识你！" --voice-id "{VOICE_ID}" -o "tmp/chat_with_anyone/voice_design/reply.wav"`
+5. Present audio and continue roleplay with same `--voice-id`.
 
-### Example 3: Image-based → recognized as public figure → fallback to Workflow A
+## Troubleshooting
 
-**User**: [uploads elon.jpg] 我想跟这个人聊聊
-
-**Agent**:
-1. (Internal) Use vision to analyze the image — recognized as Elon Musk.
-2. (Internal) Person is a known public figure → **switch to Workflow A** for authentic voice.
-3. (Internal) Follow Workflow A steps: find a speech video, download, extract audio segment, generate TTS with `--ref-audio`.
-4. **Agent replies**: "图片中的人物是 Elon Musk，我找到了他的真实声音来跟你对话！" (Presents audio and continues roleplay).
-
-## Dependencies
-- **youtube-downloader**: For fetching videos and subtitles (Workflow A only).
-- **ffmpeg**: For trimming and converting audio formats (Workflow A only).
-- **tts**: For generating the final speech using `--ref-audio` or `--voice-id`.
-- **requests**: Python HTTP library (used by `voice_design.py`).
-- **Noiz API key**: Required for voice-design and authenticated TTS. Set up via `python3 skills/tts/scripts/tts.py config --set-api-key YOUR_KEY`.
+| Problem | Solution |
+|---------|----------|
+| Download fails or video unavailable | Try a different video URL; some regions/videos are restricted |
+| No SRT subtitle files | Re-download with `--sub-lang en,zh-Hans`; if still none, try a different video with auto-captions |
+| `extract_ref_segment.py` finds no suitable window | Use `--min-duration 2` for shorter clips, or try a different video |
+| Voice design returns error | Check Noiz API key; ensure image is a clear photo of a person |
+| TTS output sounds wrong | For Workflow A, try a different reference video; for Workflow B, adjust `--voice-description` |
