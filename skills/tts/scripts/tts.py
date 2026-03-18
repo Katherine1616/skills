@@ -50,16 +50,18 @@ def normalize_api_key_base64(value: str) -> str:
 
 
 def _migrate_legacy_key() -> None:
-    """One-time migration from ~/.noiz_api_key to XDG path."""
+    """One-time migration from ~/.noiz_api_key to XDG path (non-destructive)."""
     if _LEGACY_KEY_FILE.exists() and not NOIZ_KEY_FILE.exists():
         NOIZ_KEY_FILE.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         raw = _LEGACY_KEY_FILE.read_text(encoding="utf-8").strip()
         if raw:
             NOIZ_KEY_FILE.write_text(raw, encoding="utf-8")
             os.chmod(str(NOIZ_KEY_FILE), 0o600)
-        _LEGACY_KEY_FILE.unlink()
         print(
-            "[config] Migrated API key from {} to {}".format(_LEGACY_KEY_FILE, NOIZ_KEY_FILE),
+            "[config] Copied API key from {} to {}. "
+            "You can remove the old file manually if desired.".format(
+                _LEGACY_KEY_FILE, NOIZ_KEY_FILE
+            ),
             file=sys.stderr,
         )
 

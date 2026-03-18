@@ -1,6 +1,20 @@
 ---
 name: tts
 description: "Use this skill whenever the user wants to convert text into speech, generate audio from text, or produce voiceovers. Triggers include: any mention of 'TTS', 'text to speech', 'speak', 'say', 'voice', 'read aloud', 'audio narration', 'voiceover', 'dubbing', or requests to turn written content into spoken audio. Also use when converting EPUB/PDF/SRT/articles to audio, cloning voices from reference audio, controlling emotion or speed in speech, aligning speech to subtitle timelines, or producing per-segment voice-mapped audio."
+env:
+  - NOIZ_API_KEY  # optional; if set, used as Noiz API credential instead of key file
+runtime_requirements:
+  - requests  # required for Noiz backend; install with: uv pip install requests
+  - ffmpeg    # required only for timeline mode (render subcommand)
+  - kokoro-tts  # optional; needed only if using the Kokoro local backend
+file_access:
+  - ~/.config/noiz/api_key  # read/write; stores the Noiz API key
+  - ~/.noiz_api_key          # read-only; legacy key location, copied (not deleted) to new path on first run
+network_access:
+  - https://noiz.ai/v1/*                     # Noiz TTS API (authenticated and guest endpoints)
+  - https://storage.googleapis.com/noiz_audio_public/*  # default Chinese reference audio
+  - https://noiz.ai/resource/*               # default English reference audio
+  - user-supplied reference audio URLs       # downloaded only when --ref-audio is given a URL
 ---
 
 # tts
@@ -137,6 +151,19 @@ Available guest voices (15 built-in):
 | `a845c7de` | The Naturalist (Silas) | en | M | Calm |
 | `5a68d66b` | The Healer (Serena) | en | F | Calm |
 | `0e4ab6ec` | The Mentor (Maya) | en | F | Calm |
+
+## Security & data disclosure
+
+This skill performs the following file and network operations at runtime:
+
+- **Credential storage**: When you run `config --set-api-key`, the key is saved to `~/.config/noiz/api_key` (permissions `0600`). The `NOIZ_API_KEY` environment variable is also supported as an alternative.
+- **Legacy key migration**: If `~/.noiz_api_key` exists and `~/.config/noiz/api_key` does not, the key is **copied** (not deleted) to the new location. A message is printed; the old file is left untouched for you to remove manually.
+- **Network calls (Noiz backend)**: Text and optional reference audio are uploaded to `https://noiz.ai/v1/` for synthesis. No data is sent unless you invoke a Noiz command.
+- **Reference audio download**: When `--ref-audio` is a URL, the file is downloaded to a temp file, used for the API call, then deleted. If no voice-id or ref-audio is provided, a default reference audio is downloaded from `storage.googleapis.com` or `noiz.ai`.
+- **Temp files**: Temporary audio/text files may be created during synthesis and are cleaned up after use.
+- **ffmpeg**: Invoked only in timeline `render` mode to assemble the final audio.
+
+No files outside the output path and `~/.config/noiz/` are modified. The Kokoro backend runs entirely offline with no network access.
 
 ## Requirements
 
