@@ -14,6 +14,7 @@ import os
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 from unittest.mock import patch
 
@@ -109,46 +110,41 @@ class TestDetectBackend(unittest.TestCase):
 class TestCmdSpeakGuestMode(unittest.TestCase):
 
     def _run(self, args):
-        with patch("subprocess.check_call") as mock_call, \
-             patch.object(tts, "ensure_noiz_ready"):
+        mock_synth = unittest.mock.MagicMock(return_value=1.0)
+        with patch.object(tts, "ensure_noiz_ready"), \
+             patch.dict("sys.modules", {"noiz_tts": unittest.mock.MagicMock(synthesize_guest=mock_synth)}):
             rc = tts.cmd_speak(args)
-            return rc, mock_call
+            return rc, mock_synth
 
-    def test_calls_noiz_tts_with_guest_flag(self):
-        rc, mock_call = self._run(make_speak_args())
+    def test_calls_synthesize_guest(self):
+        rc, mock_synth = self._run(make_speak_args())
         self.assertEqual(rc, 0)
-        cmd = mock_call.call_args[0][0]
-        self.assertIn("--guest", cmd)
-        self.assertIn("noiz_tts.py", cmd[1])
+        mock_synth.assert_called_once()
 
     def test_voice_id_forwarded(self):
-        rc, mock_call = self._run(make_speak_args(voice_id="883b6b7c"))
-        cmd = mock_call.call_args[0][0]
-        idx = cmd.index("--voice-id")
-        self.assertEqual(cmd[idx + 1], "883b6b7c")
+        rc, mock_synth = self._run(make_speak_args(voice_id="883b6b7c"))
+        kwargs = mock_synth.call_args[1]
+        self.assertEqual(kwargs["voice_id"], "883b6b7c")
 
     def test_text_forwarded(self):
-        rc, mock_call = self._run(make_speak_args(text="hi there"))
-        cmd = mock_call.call_args[0][0]
-        idx = cmd.index("--text")
-        self.assertEqual(cmd[idx + 1], "hi there")
+        rc, mock_synth = self._run(make_speak_args(text="hi there"))
+        kwargs = mock_synth.call_args[1]
+        self.assertEqual(kwargs["text"], "hi there")
 
     def test_ogg_format_aliased_to_opus(self):
-        rc, mock_call = self._run(make_speak_args(format="ogg"))
-        cmd = mock_call.call_args[0][0]
-        self.assertIn("opus", cmd)
-        self.assertNotIn("ogg", cmd)
+        rc, mock_synth = self._run(make_speak_args(format="ogg"))
+        kwargs = mock_synth.call_args[1]
+        self.assertEqual(kwargs["output_format"], "opus")
 
     def test_speed_forwarded_when_set(self):
-        rc, mock_call = self._run(make_speak_args(speed=1.5))
-        cmd = mock_call.call_args[0][0]
-        idx = cmd.index("--speed")
-        self.assertEqual(cmd[idx + 1], "1.5")
+        rc, mock_synth = self._run(make_speak_args(speed=1.5))
+        kwargs = mock_synth.call_args[1]
+        self.assertEqual(kwargs["speed"], 1.5)
 
-    def test_speed_absent_when_not_set(self):
-        rc, mock_call = self._run(make_speak_args(speed=None))
-        cmd = mock_call.call_args[0][0]
-        self.assertNotIn("--speed", cmd)
+    def test_speed_default_when_not_set(self):
+        rc, mock_synth = self._run(make_speak_args(speed=None))
+        kwargs = mock_synth.call_args[1]
+        self.assertEqual(kwargs["speed"], 1.0)
 
     def test_missing_voice_id_returns_error(self):
         args = make_speak_args(voice_id=None)

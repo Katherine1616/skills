@@ -13,8 +13,6 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-import requests
-
 
 def normalize_output_format(output_format: str) -> str:
     # "ogg" is treated as an alias to opus.
@@ -39,6 +37,8 @@ def normalize_api_key_base64(api_key: str) -> str:
 def call_emotion_enhance(
     base_url: str, api_key: str, text: str, timeout: int
 ) -> str:
+    import requests
+
     resp = requests.post(
         f"{base_url.rstrip('/')}/emotion-enhance",
         headers={"Authorization": api_key, "Content-Type": "application/json"},
@@ -93,6 +93,8 @@ def synthesize(
     if duration is not None:
         data["duration"] = str(duration)
 
+    import requests
+
     files = None
     if reference_audio:
         if not reference_audio.exists():
@@ -145,6 +147,8 @@ def synthesize_guest(
     if root.endswith("/v1"):
         root = root[:-3]
     url = f"{root}/api/v1/guest/text-to-speech"
+
+    import requests
 
     normalized_format = normalize_output_format(output_format)
     data: Dict[str, str] = {
